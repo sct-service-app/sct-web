@@ -18,6 +18,7 @@ import { useDefaultServiceQuery } from '@/features/packages/queries'
 import { Spinner } from '@/shared/ui/Spinner'
 import { Card } from '@/shared/ui/Card'
 import { Button } from '@/shared/ui/Button'
+import { SafeImage } from '@/shared/ui/SafeImage'
 
 /** Нейтральные шаги процесса — в API их нет, одинаковы для любой услуги. */
 const PROCESS_STEPS = [
@@ -81,6 +82,17 @@ export default function DefaultServiceDetailPage() {
               className="absolute inset-x-0 top-0 h-1.5"
               style={{ background: `linear-gradient(90deg, ${accent}, #F2C94C)` }}
             />
+            {/* Картинка услуги (бэк PR #11). Пустая строка — картинки нет. */}
+            {data.image_url ? (
+              <div className="mb-5 flex aspect-[2/1] max-h-72 w-full items-center justify-center overflow-hidden rounded-xl bg-blue-50">
+                <SafeImage
+                  src={data.image_url}
+                  alt={data.title}
+                  className="h-full w-full object-contain"
+                  fallback={null}
+                />
+              </div>
+            ) : null}
             <div className="mb-5 flex flex-wrap items-center gap-2 md:gap-3">
               <Pill className="bg-blue-50 text-brandBlue">Услуга для вашего авто</Pill>
               {data.category?.name && (

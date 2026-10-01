@@ -10,6 +10,12 @@
  * service_package_id, preferred_datetime, service_station_id, comment }.
  *
  * Пробег в дизайне не запрашивается — не отправляем current_mileage_km.
+ *
+ * Время: с бэк PR #11 (флаг `useSlotsApiEnabled`) — только свободные старты
+ * из available-slots, `preferred_datetime` уходит строкой бэка как есть.
+ * Бокс бэк выбирает сам. Если слот заняли, пока человек подтверждал, бэк
+ * отвечает BOOKING_SLOT_UNAVAILABLE — возвращаем на шаг времени со свежим
+ * списком. Без флага — старая нарезка часов работы.
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
@@ -21,11 +27,13 @@ import { Card } from '@/shared/ui/Card'
 import { Button } from '@/shared/ui/Button'
 import { SafeImage } from '@/shared/ui/SafeImage'
 import { parseApiError } from '@/features/auth/errors'
-import { formatMoney, formatDateTime } from '@/shared/lib/format'
+import { formatMoney, formatDateTimeRange, formatDuration } from '@/shared/lib/format'
 import { getPackageShortTitle } from '@/features/packages/lib'
 import { BranchStep } from '@/features/booking-wizard/BranchStep'
 import { DateTimeStep } from '@/features/booking-wizard/DateTimeStep'
-import { localIsoToUtcIso } from '@/features/booking-wizard/lib'
+import { bookingConflict, slotToIso } from '@/features/booking-wizard/lib'
+import { useAvailableSlotsQuery, useSlotsApiEnabled } from '@/features/booking-wizard/queries'
+import type { SlotsService } from '@/features/booking-wizard/api'
 import { cn } from '@/shared/lib/cn'
 import type { ServiceStation } from '@/features/service-stations/types'
 import type { ClientPackageItem } from '@/shared/api/types'
@@ -52,6 +60,25 @@ export default function BookServicePage() {
   const [comment, setComment] = useState('')
   const [serverError, setServerError] = useState<string | null>(null)
   const [done, setDone] = useState(false)
+  // П.2 ТЗ: «понимаю, что возможна живая очередь». Только блокирует кнопку,
+  // на бэк не уходит (так договорились с бэком).
+  const [queueAck, setQueueAck] = useState(false)
+
+  const slotsApi = useSlotsApiEnabled()
+  const slotsService: SlotsService | null =
+    slotsApi && packageId
+      ? isDefault
+        ? { default_service_page_id: packageId }
+        : { service_package_id: packageId }
+      : null
+  // Тот же запрос, что внутри DateTimeStep (общий кэш, второго похода нет):
+  // нужен для длительности на подтверждении и перезапроса после отказа.
+  const slotsQuery = useAvailableSlotsQuery(
+    slotsService && selectedBranch && selectedDate
+      ? { ...slotsService, service_station_id: selectedBranch.id, date: selectedDate }
+      : null,
+  )
+  const durationMin = slotsService ? slotsQuery.data?.duration_minutes ?? null : null
 
   // Авто: из ?car_id=, иначе активное, иначе первое.
   const [selectedCarId, setSelectedCarId] = useState<number | null>(null)
@@ -69,7 +96,7 @@ export default function BookServicePage() {
     if (target) setSelectedCarId(target.id)
   }, [carsQuery.data, urlCarId, selectedCarId])
 
-  if (sourceQuery.isLoading || carsQuery.isLoading) {
+  if (sourceQuery.isLoading || carsQuery.isLoading || slotsApi === null) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <Spinner />
@@ -116,7 +143,8 @@ export default function BookServicePage() {
   const price = isDefault
     ? dsData?.price_note || 'Цена рассчитывается индивидуально'
     : formatMoney(pkgData!.final_price, pkgData!.currency)
-  const imageUrl = isDefault ? undefined : pkgData!.image_url
+  // У дефолтной услуги картинки нет — пустая строка (PR #11), отсюда `||`.
+  const imageUrl = isDefault ? dsData?.image_url || undefined : pkgData!.image_url
   const items = isDefault ? [] : pkgData!.package_items
   const carFallback = isDefault ? '' : pkgData!.car_title
   const carLine = selectedCar
@@ -143,13 +171,27 @@ export default function BookServicePage() {
         ...(isDefault
           ? { default_service_page_id: packageId }
           : { service_package_id: packageId }),
-        preferred_datetime: localIsoToUtcIso(selectedSlot),
+        preferred_datetime: slotToIso(selectedSlot),
         service_station_id: selectedBranch.id,
         client_comment: comment.trim() || undefined,
       })
       setDone(true)
     } catch (err) {
-      setServerError(parseApiError(err, 'Не удалось создать запись.').general)
+      const parsed = parseApiError(err, 'Не удалось создать запись.')
+      const conflict = bookingConflict(parsed)
+      if (conflict) {
+        setServerError(conflict.message)
+        if (conflict.kind !== 'unavailable') {
+          setSelectedSlot(null)
+          if (conflict.kind === 'day_closed') setSelectedDate(null)
+          setStep('datetime')
+          if (conflict.kind === 'slot_taken') void slotsQuery.refetch()
+        }
+        return
+      }
+      // Ошибка могла прийти только по полю (а `general` тогда — общее
+      // «Ошибка валидации.»), поэтому сначала смотрим поле времени.
+      setServerError(parsed.fields.preferred_datetime ?? parsed.general)
     }
   }
 
@@ -179,6 +221,7 @@ export default function BookServicePage() {
                 downloadIcs({
                   title: `SCT Service · ${shortTitle}`,
                   startIso: selectedSlot!,
+                  durationMin: durationMin ?? 60,
                   location: selectedBranch ? `${selectedBranch.name}, ${selectedBranch.address}` : '',
                 })
               }
@@ -243,9 +286,11 @@ export default function BookServicePage() {
             branchId={selectedBranch.id}
             selectedDate={selectedDate}
             selectedSlot={selectedSlot}
+            service={slotsService}
             onChange={(d, slot) => {
               setSelectedDate(d)
               setSelectedSlot(slot)
+              if (slot) setServerError(null)
             }}
           />
         )}
@@ -254,9 +299,12 @@ export default function BookServicePage() {
             items={items}
             branch={selectedBranch}
             slotIso={selectedSlot}
+            durationMin={durationMin}
             comment={comment}
             onCommentChange={setComment}
             note={isDefault ? price : undefined}
+            queueAck={queueAck}
+            onQueueAckChange={setQueueAck}
           />
         )}
       </div>
@@ -283,7 +331,7 @@ export default function BookServicePage() {
           <button
             type="button"
             onClick={onSubmit}
-            disabled={createMut.isPending}
+            disabled={createMut.isPending || !queueAck}
             className="w-full rounded-sct bg-brandBlue py-4 text-[12px] font-900 uppercase tracking-widest text-white shadow-soft-blue transition-all hover:bg-brandBlueDark disabled:opacity-60"
           >
             {createMut.isPending ? 'Создаём запись…' : 'Подтвердить запись'}
@@ -318,17 +366,26 @@ function ConfirmStep({
   items,
   branch,
   slotIso,
+  durationMin,
   comment,
   onCommentChange,
   note,
+  queueAck,
+  onQueueAckChange,
 }: {
   items: ClientPackageItem[]
   branch: ServiceStation
   slotIso: string
+  durationMin: number | null
   comment: string
   onCommentChange: (v: string) => void
   note?: string
+  queueAck: boolean
+  onQueueAckChange: (v: boolean) => void
 }) {
+  const endIso = durationMin
+    ? new Date(new Date(slotIso).getTime() + durationMin * 60_000).toISOString()
+    : null
   return (
     <div>
       <h2 className="mb-5 text-xl font-900 uppercase tracking-tight text-textPrimary md:text-2xl">
@@ -379,8 +436,20 @@ function ConfirmStep({
           <span className="text-[10px] font-900 uppercase tracking-widest text-textSecondary">
             Выбранное время
           </span>
-          <span className="text-right text-sm font-900 text-brandBlue">{formatDateTime(slotIso)}</span>
+          <span className="text-right text-sm font-900 text-brandBlue">
+            {formatDateTimeRange(slotIso, endIso)}
+          </span>
         </div>
+        {durationMin ? (
+          <div className="flex items-center justify-between gap-3 px-5 py-4">
+            <span className="text-[10px] font-900 uppercase tracking-widest text-textSecondary">
+              Длительность
+            </span>
+            <span className="text-right text-sm font-bold text-textPrimary">
+              {formatDuration(durationMin)}
+            </span>
+          </div>
+        ) : null}
       </Card>
 
       <textarea
@@ -390,6 +459,18 @@ function ConfirmStep({
         placeholder="Комментарий к вашему визиту (необязательно)…"
         className="mt-4 w-full rounded-sct border border-borderLight bg-surfaceLight px-4 py-3 text-sm font-medium text-textPrimary outline-none transition-all placeholder:text-textSecondary/60 focus:border-brandBlue focus:bg-white focus:ring-2 focus:ring-brandBlue/15"
       />
+
+      <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-sct border border-borderLight bg-white p-4">
+        <input
+          type="checkbox"
+          checked={queueAck}
+          onChange={(e) => onQueueAckChange(e.target.checked)}
+          className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-brandBlue"
+        />
+        <span className="text-sm font-medium text-textPrimary">
+          Понимаю, что на сервисе возможна живая очередь и время начала может немного сдвинуться.
+        </span>
+      </label>
     </div>
   )
 }
@@ -406,14 +487,16 @@ function formatQty(quantity: string | number | null | undefined, itemType: strin
 function downloadIcs({
   title,
   startIso,
+  durationMin,
   location,
 }: {
   title: string
   startIso: string
+  durationMin: number
   location: string
 }) {
   const start = new Date(startIso)
-  const end = new Date(start.getTime() + 60 * 60_000)
+  const end = new Date(start.getTime() + durationMin * 60_000)
   const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
   const ics = [
     'BEGIN:VCALENDAR',

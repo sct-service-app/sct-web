@@ -28,6 +28,7 @@ import { Button } from '@/shared/ui/Button'
 import { SafeImage } from '@/shared/ui/SafeImage'
 import { Skeleton } from '@/shared/ui/Skeleton'
 import { formatMileage } from '@/shared/lib/format'
+import { pickCarTitle } from '@/features/garage/lib'
 
 export function ActiveCarBlock() {
   // page-data больше не принимает status/period/limit/offset — только car_id.
@@ -81,7 +82,7 @@ export function ActiveCarBlock() {
   const topRec = sortRecommendationsByUrgency(rec?.recommendations ?? [])[0]
   // Полное название модификации — то же, что в плашках на «Авто» и «Услугах»,
   // чтобы машина везде называлась одинаково.
-  const carTitle = (car.full_car_title || car.display_name).toUpperCase()
+  const carTitle = pickCarTitle(car).toUpperCase()
   const carShortSpecs = car.generation?.name
     ? car.generation.name + (car.configuration?.name ? ` · ${car.configuration.name}` : '')
     : car.configuration?.name ?? ''

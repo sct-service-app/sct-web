@@ -16,6 +16,7 @@ import { SafeImage } from '@/shared/ui/SafeImage'
 import { useCarYear } from '@/features/garage/carYear'
 import { PlateBadge } from '@/features/service-book/CarHeroCompact'
 import type { ClientActiveCar } from '@/shared/api/types'
+import { pickCarTitle } from '@/features/garage/lib'
 
 interface ActiveCarStripProps {
   activeCar: ClientActiveCar
@@ -46,7 +47,7 @@ export function ActiveCarStrip({ activeCar }: ActiveCarStripProps) {
           ● Активное авто
         </p>
         <h2 className="mt-1 text-base font-900 uppercase leading-tight tracking-tight text-textPrimary md:text-lg">
-          Услуги для <span className="text-brandBlue">{activeCar.car_title}</span>
+          Услуги для <span className="text-brandBlue">{pickCarTitle(activeCar)}</span>
         </h2>
       </div>
       {/* Госномер и год — те же рамки, что на «Авто» и в гараже. */}

@@ -9,11 +9,11 @@
  */
 import { Link } from 'react-router-dom'
 import { useBookingsQuery } from '@/features/bookings/queries'
-import { splitBookings } from '@/features/bookings/lib'
+import { splitBookings, visitTimeRange } from '@/features/bookings/lib'
 import type { Booking } from '@/features/bookings/types'
 import { Card } from '@/shared/ui/Card'
 import { cn } from '@/shared/lib/cn'
-import { formatDateTime } from '@/shared/lib/format'
+import { formatDateTimeRange } from '@/shared/lib/format'
 
 export function UpcomingVisitsSection() {
   const { data } = useBookingsQuery({ status: 'all', period: 'all', limit: 20, offset: 0 })
@@ -59,7 +59,7 @@ function VisitRow({
   booking: Booking
   highlighted: boolean
 }) {
-  const datetime = booking.final_datetime ?? booking.scheduled_datetime ?? booking.preferred_datetime
+  const { start, end } = visitTimeRange(booking)
   const title =
     booking.service_data?.title ||
     booking.service_package_data?.title ||
@@ -95,7 +95,7 @@ function VisitRow({
           {title}
         </p>
         <p className="mt-1 text-[11px] font-bold uppercase tracking-widest text-textSecondary">
-          {datetime ? formatDateTime(datetime) : '—'}
+          {formatDateTimeRange(start, end)}
           {booking.car.title && <> · {booking.car.title}</>}
         </p>
       </div>

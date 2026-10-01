@@ -10,6 +10,7 @@ import type { ServiceBookCar } from './types'
 import { Card } from '@/shared/ui/Card'
 import { SafeImage } from '@/shared/ui/SafeImage'
 import { formatMileage } from '@/shared/lib/format'
+import { pickCarTitle } from '@/features/garage/lib'
 
 interface CarHeroProps {
   car: ServiceBookCar
@@ -26,7 +27,7 @@ export function CarHero({ car, totalCars }: CarHeroProps) {
             <div className="h-24 w-24 overflow-hidden rounded-sct-lg border border-borderLight bg-surfaceLight md:h-36 md:w-36">
               <SafeImage
                 src={car.image_url ?? car.mark.logo_url}
-                alt={car.full_car_title}
+                alt={pickCarTitle(car)}
                 className="h-full w-full object-cover"
                 fallback={
                   <div className="flex h-full w-full items-center justify-center text-2xl font-900 uppercase text-borderLight">

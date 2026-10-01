@@ -6,7 +6,8 @@
 import { Link } from 'react-router-dom'
 import type { Appointment } from './types'
 import { cn } from '@/shared/lib/cn'
-import { formatDateTime } from '@/shared/lib/format'
+import { formatDateTimeRange } from '@/shared/lib/format'
+import { visitTimeRange } from '@/features/bookings/lib'
 
 interface AppointmentCardProps {
   appointment: Appointment
@@ -14,10 +15,7 @@ interface AppointmentCardProps {
 }
 
 export function AppointmentCard({ appointment, highlighted }: AppointmentCardProps) {
-  const datetime =
-    appointment.final_datetime ??
-    appointment.scheduled_datetime ??
-    appointment.preferred_datetime
+  const { start, end } = visitTimeRange(appointment)
 
   const isActive = appointment.is_active
   const isCancelled = appointment.is_cancelled
@@ -62,7 +60,7 @@ export function AppointmentCard({ appointment, highlighted }: AppointmentCardPro
             tone === 'dark' ? 'text-white' : 'text-textPrimary',
           )}
         >
-          {formatDateTime(datetime)}
+          {formatDateTimeRange(start, end)}
         </p>
         <p
           className={cn(

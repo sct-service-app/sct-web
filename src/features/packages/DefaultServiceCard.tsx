@@ -6,6 +6,7 @@
  * «Рассчитать стоимость». Ведёт на detail дефолтной услуги.
  */
 import { Link } from 'react-router-dom'
+import { SafeImage } from '@/shared/ui/SafeImage'
 import type { ClientDefaultServicePage } from './types'
 
 interface DefaultServiceCardProps {
@@ -19,9 +20,21 @@ export function DefaultServiceCard({ service }: DefaultServiceCardProps) {
   return (
     <article className="group flex flex-col rounded-sct border border-borderLight bg-white p-5 transition-all hover:-translate-y-1 hover:border-brandBlue/50 hover:shadow-soft-card">
       <Link to={to} className="flex flex-1 flex-col">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-brandBlue">
-          <IconCalc />
-        </div>
+        {/* Картинка услуги с бэк PR #11; нет её — пустая строка, оставляем иконку. */}
+        {service.image_url ? (
+          <div className="mb-4 flex aspect-[2/1] w-full items-center justify-center overflow-hidden rounded-xl bg-blue-50 text-brandBlue">
+            <SafeImage
+              src={service.image_url}
+              alt={service.title}
+              className="h-full w-full object-contain"
+              fallback={<IconCalc />}
+            />
+          </div>
+        ) : (
+          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-brandBlue">
+            <IconCalc />
+          </div>
+        )}
 
         <h3 className="line-clamp-2 text-base font-900 uppercase leading-tight tracking-tight text-textPrimary">
           {service.title}

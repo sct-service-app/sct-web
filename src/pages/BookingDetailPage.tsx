@@ -25,10 +25,10 @@ import { Card } from '@/shared/ui/Card'
 import { Button } from '@/shared/ui/Button'
 import { toast } from '@/shared/ui/Toast'
 import { parseApiError } from '@/features/auth/errors'
-import { formatDateTime, formatMileage } from '@/shared/lib/format'
+import { formatDateTime, formatDateTimeRange, formatDuration, formatMileage } from '@/shared/lib/format'
 import { cn } from '@/shared/lib/cn'
 import type { BookingStatus } from '@/features/bookings/types'
-import { isBookingCancelled } from '@/features/bookings/lib'
+import { isBookingCancelled, visitTimeRange } from '@/features/bookings/lib'
 
 export default function BookingDetailPage() {
   const params = useParams<{ id: string }>()
@@ -66,8 +66,8 @@ export default function BookingDetailPage() {
     )
   }
 
-  const datetime =
-    data.final_datetime ?? data.scheduled_datetime ?? data.preferred_datetime
+  const { start, end } = visitTimeRange(data)
+  const duration = formatDuration(data.duration_minutes)
 
   // Дискриминатор услуги: пакет ИЛИ дефолтная.
   const isDefault = data.service_source_type === 'default_service_page'
@@ -119,8 +119,8 @@ export default function BookingDetailPage() {
       <Card className="p-6 md:p-8">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3 md:gap-8">
           <Field
-            label="Дата и время"
-            value={datetime ? formatDateTime(datetime) : '—'}
+            label={duration ? `Дата и время · ${duration}` : 'Дата и время'}
+            value={formatDateTimeRange(start, end)}
             accent="primary"
           />
           <Field

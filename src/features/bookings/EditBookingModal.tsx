@@ -14,6 +14,11 @@
  *
  * Пере-использует те же компоненты wizard'а: BranchStep + DateTimeStep.
  * Это даёт идентичный UX с созданием записи.
+ *
+ * С бэк PR #11 (флаг `useSlotsApiEnabled`) перенос времени и смену филиала
+ * отключаем: клиентский PATCH пока не перераспределяет бокс, и запись можно
+ * перенести на время, где все боксы заняты. Остаётся только комментарий.
+ * Вернуть вкладки, когда бэк научит PATCH проверять занятость.
  */
 import { useEffect, useState } from 'react'
 import { Modal } from '@/shared/ui/Modal'
@@ -22,6 +27,7 @@ import { Textarea } from '@/shared/ui/Textarea'
 import { BranchStep } from '@/features/booking-wizard/BranchStep'
 import { DateTimeStep } from '@/features/booking-wizard/DateTimeStep'
 import { localIsoToUtcIso } from '@/features/booking-wizard/lib'
+import { useSlotsApiEnabled } from '@/features/booking-wizard/queries'
 import { useUpdateBookingMutation } from './queries'
 import { parseApiError } from '@/features/auth/errors'
 import { toast } from '@/shared/ui/Toast'
@@ -38,7 +44,8 @@ interface EditBookingModalProps {
 }
 
 export function EditBookingModal({ open, onClose, booking }: EditBookingModalProps) {
-  const [tab, setTab] = useState<EditTab>('datetime')
+  const canReschedule = useSlotsApiEnabled() === false
+  const [tab, setTab] = useState<EditTab>(canReschedule ? 'datetime' : 'comment')
   const [branch, setBranch] = useState<ServiceStation | null>(null)
   const [date, setDate] = useState<string | null>(null)
   const [slot, setSlot] = useState<string | null>(null) // localIso
@@ -51,13 +58,13 @@ export function EditBookingModal({ open, onClose, booking }: EditBookingModalPro
   // данные booking'а, а не последний черновик из предыдущего открытия.
   useEffect(() => {
     if (!open) return
-    setTab('datetime')
+    setTab(canReschedule ? 'datetime' : 'comment')
     setBranch(null)
     setDate(null)
     setSlot(null)
     setComment(booking.comment || '')
     setServerError(null)
-  }, [open, booking.id, booking.comment])
+  }, [open, booking.id, booking.comment, canReschedule])
 
   const hasChanges = Boolean(branch) || Boolean(slot) || comment !== (booking.comment || '')
 
@@ -100,8 +107,9 @@ export function EditBookingModal({ open, onClose, booking }: EditBookingModalPro
   return (
     <Modal open={open} onClose={onClose} title="Изменить запись" size="lg">
       <p className="-mt-2 mb-5 text-sm text-textSecondary">
-        Можете изменить филиал, дату/время или добавить комментарий. Поля,
-        которые не трогаете, останутся как есть.
+        {canReschedule
+          ? 'Можете изменить филиал, дату/время или добавить комментарий. Поля, которые не трогаете, останутся как есть.'
+          : 'Можно изменить комментарий к визиту. Чтобы перенести время или сменить филиал, отмените запись и создайте новую — так мы подберём свободный бокс.'}
       </p>
 
       {/* Текущая запись (read-only summary) */}
@@ -123,12 +131,16 @@ export function EditBookingModal({ open, onClose, booking }: EditBookingModalPro
       {/* Вкладки редактирования. На мобиле — горизонтальный скролл с
           небольшими паддингами, чтобы 3 длинных лейбла не пере-обернулись. */}
       <div className="mb-5 flex gap-3 overflow-x-auto border-b border-borderLight pb-3 md:gap-5">
-        <TabButton current={tab} value="datetime" onClick={setTab}>
-          Дата и время
-        </TabButton>
-        <TabButton current={tab} value="branch" onClick={setTab}>
-          Филиал
-        </TabButton>
+        {canReschedule && (
+          <>
+            <TabButton current={tab} value="datetime" onClick={setTab}>
+              Дата и время
+            </TabButton>
+            <TabButton current={tab} value="branch" onClick={setTab}>
+              Филиал
+            </TabButton>
+          </>
+        )}
         <TabButton current={tab} value="comment" onClick={setTab}>
           Комментарий
         </TabButton>

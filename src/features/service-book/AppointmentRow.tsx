@@ -12,7 +12,7 @@
  */
 import { Link } from 'react-router-dom'
 import type { Booking } from '@/features/bookings/types'
-import { isBookingCancelled } from '@/features/bookings/lib'
+import { isBookingCancelled, visitTimeRange } from '@/features/bookings/lib'
 import { cn } from '@/shared/lib/cn'
 
 interface AppointmentRowProps {
@@ -20,10 +20,13 @@ interface AppointmentRowProps {
   highlighted?: boolean
 }
 
-function splitDateTime(iso: string | null) {
+function splitDateTime(iso: string | null, endIso: string | null) {
   if (!iso) return { time: '—', date: '—' }
   const d = new Date(iso)
-  const time = d.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const hhmm = (x: Date) => x.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  // Конец визита есть только у записей после бэк PR #11: «16:00–18:00».
+  const end = endIso ? new Date(endIso) : null
+  const time = end && end.getTime() > d.getTime() ? `${hhmm(d)}–${hhmm(end)}` : hhmm(d)
   const day = d.toLocaleDateString('ru-RU', { day: 'numeric' })
   const month = d.toLocaleDateString('ru-RU', { month: 'long' })
   const weekday = d.toLocaleDateString('ru-RU', { weekday: 'short' })
@@ -31,11 +34,8 @@ function splitDateTime(iso: string | null) {
 }
 
 export function AppointmentRow({ appointment, highlighted }: AppointmentRowProps) {
-  const datetime =
-    appointment.final_datetime ??
-    appointment.scheduled_datetime ??
-    appointment.preferred_datetime
-  const { time, date } = splitDateTime(datetime)
+  const { start, end } = visitTimeRange(appointment)
+  const { time, date } = splitDateTime(start, end)
   const svc = appointment.service_data
   const isDefault = appointment.service_source_type === 'default_service_page'
   const title =

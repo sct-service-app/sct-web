@@ -21,6 +21,7 @@ import type { ServiceBookCar } from './types'
 import { Card } from '@/shared/ui/Card'
 import { SafeImage } from '@/shared/ui/SafeImage'
 import { useCarYear } from '@/features/garage/carYear'
+import { pickCarTitle } from '@/features/garage/lib'
 
 interface CarHeroCompactProps {
   car: ServiceBookCar
@@ -33,7 +34,7 @@ export function CarHeroCompact({ car }: CarHeroCompactProps) {
   // Полное название модификации — как в плашке на «Услугах», которую заказчик
   // и просил повторить («BMW X7 I (G07) Рестайлинг Внедорожник…»). Год в
   // заголовок не дублируем: он рядом, в отдельной рамке.
-  const title = car.full_car_title || car.display_name
+  const title = pickCarTitle(car)
 
   return (
     <Link to={`/garage/edit/${car.id}`} className="block">
