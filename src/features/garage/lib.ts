@@ -52,11 +52,15 @@ export function getCarProductionYear(car: ClientGarageCar): number | null {
 
 /**
  * Полное название авто для клиента — одно правило на все экраны.
- *
- * С бэк PR #11 приходит готовое `customer_car_title` («BMW X7 | G07 |
- * 2022-2026 Рестайлинг | …», с годами поколения — п.6 ТЗ). Его и
- * показываем, сами ничего не собираем. Пока бэк старый — прежние поля.
  * Принимает любую форму авто: из гаража, из page-data, active_car пакетов.
+ *
+ * `customer_car_title` (бэк PR #11) — ПОСЛЕДНИЙ запасной вариант, а не
+ * первый: на sandbox (09.10.2026) бэк собирает его с непереведёнными кодами
+ * кузова — «BMW 02 (E10) | 1966-1977 I | SEDAN_2_DOORS | 2 дв | …», «COUPE»,
+ * «ALLROAD_5_DOORS». Показывать это клиенту нельзя. Русские
+ * `full_car_title` / `car_title` приходят везде, где есть машина; год
+ * выпуска (п.6 ТЗ) и так стоит отдельной таблеткой рядом с госномером.
+ * Когда бэк переведёт кузов — вернуть `customer_car_title` первым.
  */
 export function pickCarTitle(car: {
   customer_car_title?: string | null
@@ -65,9 +69,9 @@ export function pickCarTitle(car: {
   display_name?: string | null
 }): string {
   return (
-    car.customer_car_title ||
     car.full_car_title ||
     car.car_title ||
+    car.customer_car_title ||
     car.display_name ||
     'Автомобиль'
   )
